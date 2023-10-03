@@ -204,21 +204,21 @@ def main():
 
     crms.append(currentcrm) # for the last on the list!
 
+
+
+
+    # output data to txt for testing
     with open('output.txt',mode='w') as f:
         for crm in crms:
             f.write(f'start of {crm.id} chemistry:\n')
             f.write(json.dumps(crm.chemistry))
             f.write(f'\nend of {crm.id} chemistry.\n\n\n')
-    
 
 
-
-
-
-    # # find list of unique entries in given col
-    # unique_CRM_list = set(catalogue_df['CRM ID'].tolist())
-    # print(unique_CRM_list)
-    # print(f'NUMBER OF UNIQUE CRM IDs: {len(unique_CRM_list)}')
+    # find list of unique entries in given col
+    unique_methods_list = set(cat_df['Element'].tolist())
+    print(unique_methods_list)
+    print(f'NUMBER OF UNIQUE METHODS: {len(unique_methods_list)}')
 
     # unique_compound_list = set(catalogue_df['Element'].tolist())
     # print(unique_compound_list)
