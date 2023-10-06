@@ -10,6 +10,7 @@ import re
 import pandas as pd
 import chemparse
 import json
+from collections import Counter
 
 
 # for sorting analysis method, USE: 4-Acid Digestion > 
@@ -216,9 +217,11 @@ def main():
 
 
     # find list of unique entries in given col
-    unique_methods_list = set(cat_df['Element'].tolist())
+    unique_methods_list = set(cat_df['Analysis Method'].tolist())
+    methods_counter = Counter(cat_df['Analysis Method'].tolist())
     print(unique_methods_list)
     print(f'NUMBER OF UNIQUE METHODS: {len(unique_methods_list)}')
+    print(methods_counter)
 
     # unique_compound_list = set(catalogue_df['Element'].tolist())
     # print(unique_compound_list)
