@@ -1,8 +1,8 @@
 # oreas catalogue info-grabber
 # started 2023/10/02 ZH
 
-versionNum = 'v0.0.2'
-versionDate = '2023/10/03'
+versionNum = 'v0.0.3'
+versionDate = '2023/10/10'
 
 import os
 import sys
@@ -11,11 +11,27 @@ import pandas as pd
 import chemparse
 import json
 from collections import Counter
+from functools import cache
 
 
 # for sorting analysis method, USE: 4-Acid Digestion > 
 # chris has doc: Merging.xlsx G:\.shortcut-targets-by-id\1w2nUsja1tidZ-QYTuemO6DzCaclAmIlm\PXRFS\12. Certified Reference Material\5_CRM Master Spreadsheet\OREAS Sorting
 # get Principle cert vals and which are superCRMs from copying search
+
+from functools import wraps
+from time import time
+
+def timing(f):
+    @wraps(f)
+    def wrap(*args, **kw):
+        ts = time()
+        result = f(*args, **kw)
+        te = time()
+        print('func:%r args:[%r, %r] took: %2.4f sec' % \
+          (f.__name__, args, kw, te-ts))
+        return result
+    return wrap
+
 
 
 class CRM:
@@ -32,7 +48,7 @@ class CRM:
             self.id = format_oreas_crm_id(crm_id)
         self.chemistry = {}
 
-        print(f'Initialising CRM... {self.id=} {self.group=}, {self.type=}, {self.matrix=}, {self.mineralisation=}, {self.status=}, {self.supercrm=}')
+        #print(f'Initialising CRM... {self.id=} {self.group=}, {self.type=}, {self.matrix=}, {self.mineralisation=}, {self.status=}, {self.supercrm=}')
     
     def addChemistry(self, chem_formula, chem_concentration, chem_unit, chem_analysis_method):
         #check formula - attempt conversion
@@ -45,10 +61,11 @@ class CRM:
         new_concentration = chem_concentration * conv_factor
         # add to chem dict
         if new_element not in self.chemistry.keys():
-            print(f'adding {new_element} to chemistry dict for {self.id}...')
+            #print(f'adding {new_element} to chemistry dict for {self.id}...')
             self.chemistry[new_element] = {}
         self.chemistry[new_element][chem_analysis_method] = new_concentration
 
+@cache
 def isSuperCRM(crm_id:str):
     supercrm_list = set(['OREAS 20a', 'OREAS 20b', 'OREAS 25b', 'OREAS 30a', 'OREAS 45f', 'OREAS 45h', 'OREAS 46', 'OREAS 60e', 'OREAS 61h', 'OREAS 62h', 'OREAS 70b', 'OREAS 72b', 'OREAS 73b', 'OREAS 74b', 'OREAS 75b', 'OREAS 76b', 'OREAS 77b', 'OREAS 85', 'OREAS 86', 'OREAS 120', 'OREAS 121', 'OREAS 122', 'OREAS 123', 'OREAS 124', 'OREAS 130', 'OREAS 135', 'OREAS 135b', 'OREAS 136', 'OREAS 137', 'OREAS 138', 'OREAS 139', 'OREAS 151c', 'OREAS 152c', 'OREAS 153c', 'OREAS 173', 'OREAS 174', 'OREAS 175', 'OREAS 211', 'OREAS 230', 'OREAS 231b', 'OREAS 232b', 'OREAS 233', 'OREAS 233b', 'OREAS 234', 'OREAS 234b', 'OREAS 235b', 'OREAS 236', 'OREAS 237b', 'OREAS 238b', 'OREAS 239b', 'OREAS 240', 'OREAS 240b', 'OREAS 241', 'OREAS 241b', 'OREAS 242', 'OREAS 243', 'OREAS 250c', 'OREAS 251b', 'OREAS 252c', 'OREAS 253b', 'OREAS 254c', 'OREAS 255c', 'OREAS 258', 'OREAS 262b', 'OREAS 264', 'OREAS 266', 'OREAS 273', 'OREAS 282', 'OREAS 290', 'OREAS 291', 'OREAS 292', 'OREAS 293', 'OREAS 294', 'OREAS 295', 'OREAS 296', 'OREAS 297', 'OREAS 298', 'OREAS 299', 'OREAS 315', 'OREAS 316', 'OREAS 317', 'OREAS 353b', 'OREAS 460', 'OREAS 461', 'OREAS 462', 'OREAS 463', 'OREAS 464', 'OREAS 465', 'OREAS 501d', 'OREAS 502d', 'OREAS 503e', 'OREAS 504c', 'OREAS 504d', 'OREAS 505b', 'OREAS 506', 'OREAS 507', 'OREAS 508', 'OREAS 520b', 'OREAS 521', 'OREAS 522', 'OREAS 523b', 'OREAS 525', 'OREAS 550', 'OREAS 551', 'OREAS 552', 'OREAS 552b', 'OREAS 553', 'OREAS 554', 'OREAS 554b', 'OREAS 555', 'OREAS 555b', 'OREAS 556b', 'OREAS 601c', 'OREAS 607', 'OREAS 607b', 'OREAS 609b', 'OREAS 625', 'OREAS 626', 'OREAS 627', 'OREAS 628', 'OREAS 629', 'OREAS 630b', 'OREAS 680', 'OREAS 681', 'OREAS 682', 'OREAS 683', 'OREAS 684', 'OREAS 700', 'OREAS 750', 'OREAS 751', 'OREAS 752', 'OREAS 753', 'OREAS 902', 'OREAS 903', 'OREAS 905b', 'OREAS 906', 'OREAS 907b', 'OREAS 908', 'OREAS 908b', 'OREAS 920b', 'OREAS 921', 'OREAS 921b', 'OREAS 922', 'OREAS 923', 'OREAS 924', 'OREAS 925', 'OREAS 926', 'OREAS 927', 'OREAS 928', 'OREAS 929', 'OREAS 930', 'OREAS 931', 'OREAS 931b', 'OREAS 932', 'OREAS 932b', 'OREAS 933', 'OREAS 934', 'OREAS 935', 'OREAS 990b', 'OREAS 990c', 'OREAS 993', 'OREAS 994', 'OREAS 995', 'OREAS 999'])
     if crm_id in supercrm_list:
@@ -84,6 +101,7 @@ def getUnitConversionFactor(units_from:str,units_to:str):
         raise Exception(f"Invalid unit conversion requested! {units_from=}, {units_to=}")
 
 
+@cache
 def format_oreas_crm_id(crm_id:str):
     # Define regex pattern to match desired formatting from chris
     pattern = r'^OREAS (\d+)'
@@ -93,6 +111,7 @@ def format_oreas_crm_id(crm_id:str):
 
     return formatted_string
 
+@cache
 def getFirstElementOfCompound(compound:str):
         eoi_predicted = compound[0]
         strposition = 1
@@ -109,6 +128,21 @@ def getFirstElementOfCompound(compound:str):
             strposition += 1
 
         return eoi_predicted
+
+@cache
+def getFirstElementOfNameAndCompound(nameandcompound:str):
+    """for oreas catalogue 'Element' column. e.g. input: 'Iron(III) oxide, Fe2O3' -> 'Fe'."""
+    if ', ' not in nameandcompound:
+        print(f'no comma in {nameandcompound}!!')
+        raise Exception
+    compound = nameandcompound.split(', ')[1]
+
+    element_symbol_matchstrs = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn', 'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og']
+    elementsymbol = getFirstElementOfCompound(compound)
+    if elementsymbol in element_symbol_matchstrs:
+        return elementsymbol
+    else:
+        return compound
 
 def compoundToElementConversionFactor(compound:str, element_of_interest:str=''):
     """ Returns the conversion factor to apply to a compound concentration to get the 
@@ -179,21 +213,39 @@ def compoundToElementConversionFactor(compound:str, element_of_interest:str=''):
     return eoi_mass/compound_mass
 
 
+def countAnalysisMethodsForElement(catdf:pd.DataFrame, element:str):
+    """pass oreas catalogue dataframe and element of interest. recv counter object for analysis methods for that element."""
+    copydf = catdf.copy()
+    print(copydf)
+    #copydf.set_index('Element', inplace=True)
+    #copydf = copydf.filter(like=element,axis=0)
+    copydf = copydf[copydf['Element Symbol'] == element]
+    print(copydf)
+    method_counter = Counter(copydf['Analysis Method'].tolist())
+    return method_counter
+
+
+@timing
 def main():
     # open oreas catalogue as csv, convert to dataframe
     catalogue_path = 'oreas-catalogue-2023-10-02.csv'
     cat_df = pd.read_csv(catalogue_path)
+
+    # add element symbol only AND superCRM columns
+    cat_df['Element Symbol'] = cat_df['Element'].apply(getFirstElementOfNameAndCompound)
+    cat_df['SuperCRM'] = cat_df['CRM ID'].apply(isSuperCRM)
     print(cat_df)
+    #cat_df.to_csv('outputcsv.csv')
+    print(countAnalysisMethodsForElement(cat_df,'U'))
+
 
     crm_ids_seen = set([])
     crms = []
-
-
     for i in cat_df.index:
         id = cat_df['CRM ID'][i]
         # if crm id not seen before, then make new instance of CRM class
         if id not in crm_ids_seen:
-            if crm_ids_seen:
+            if crm_ids_seen:    # if ids seen list is NOT empty
                 crms.append(currentcrm) # append currentCRM to list unless it's the first crm (list will be empty)
             crm_ids_seen.add(id)
             currentcrm = CRM(crm_id=id, crm_group=cat_df['CRM Group'][i], crm_type=cat_df['CRM Type'][i], crm_matrix=cat_df['Matrix'][i], crm_mineralisation=cat_df['Mineralisation Style'][i],crm_status=cat_df['Status'][i])
@@ -202,12 +254,7 @@ def main():
         if ', ' in formula:
             formula = formula.split(', ')[1]
         currentcrm.addChemistry(chem_formula=formula, chem_concentration=cat_df['Certified Value'][i], chem_unit=cat_df['Unit'][i], chem_analysis_method=cat_df['Analysis Method'][i])
-
     crms.append(currentcrm) # for the last on the list!
-
-
-
-
     # output data to txt for testing
     with open('output.txt',mode='w') as f:
         for crm in crms:
@@ -215,13 +262,14 @@ def main():
             f.write(json.dumps(crm.chemistry))
             f.write(f'\nend of {crm.id} chemistry.\n\n\n')
 
+    
 
-    # find list of unique entries in given col
-    unique_methods_list = set(cat_df['Analysis Method'].tolist())
-    methods_counter = Counter(cat_df['Analysis Method'].tolist())
-    print(unique_methods_list)
-    print(f'NUMBER OF UNIQUE METHODS: {len(unique_methods_list)}')
-    print(methods_counter)
+    # # find list of unique entries in given col
+    # unique_methods_list = set(cat_df['Analysis Method'].tolist())
+    # methods_counter = Counter(cat_df['Analysis Method'].tolist())
+    # print(unique_methods_list)
+    # print(f'NUMBER OF UNIQUE METHODS: {len(unique_methods_list)}')
+    # print(methods_counter)
 
     # unique_compound_list = set(catalogue_df['Element'].tolist())
     # print(unique_compound_list)
@@ -232,7 +280,6 @@ def main():
     #         unique_compound_formulas_list_all.append(compound.split(', ')[1])
     #         stoich_dict = chemparse.parse_formula(compound.split(', ')[1])
     #         print(stoich_dict)
-
     # unique_compound_formulas = set(unique_compound_formulas_list_all)
     # print(unique_compound_formulas)
     # print(f'NUMBER OF UNIQUE COMPOUND FORMULAS: {len(unique_compound_formulas)}')
