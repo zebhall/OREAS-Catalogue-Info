@@ -1,25 +1,27 @@
 # oreas catalogue info-grabber
 # started 2023/10/02 ZH
 
-versionNum = 'v0.0.3'
-versionDate = '2023/10/10'
+versionNum = 'v0.0.4'
+versionDate = '2023/10/13'
 
 import os
 import sys
 import re
 import pandas as pd
+import numpy as np
 import chemparse
 import json
 from collections import Counter
-from functools import cache
+from functools import cache, wraps
+from time import time
+
+from analysismethodprefs import analysis_method_prefs_dict as PREFS
 
 
 # for sorting analysis method, USE: 4-Acid Digestion > 
 # chris has doc: Merging.xlsx G:\.shortcut-targets-by-id\1w2nUsja1tidZ-QYTuemO6DzCaclAmIlm\PXRFS\12. Certified Reference Material\5_CRM Master Spreadsheet\OREAS Sorting
 # get Principle cert vals and which are superCRMs from copying search
 
-from functools import wraps
-from time import time
 
 def timing(f):
     @wraps(f)
@@ -33,8 +35,7 @@ def timing(f):
     return wrap
 
 
-
-class CRM:
+class Crm:
     def __init__(self, crm_id:str, crm_group:str, crm_type:str, crm_matrix:str, crm_mineralisation:str, crm_status:str):
         self.id = crm_id
         self.group = crm_group
@@ -63,7 +64,10 @@ class CRM:
         if new_element not in self.chemistry.keys():
             #print(f'adding {new_element} to chemistry dict for {self.id}...')
             self.chemistry[new_element] = {}
-        self.chemistry[new_element][chem_analysis_method] = new_concentration
+        self.chemistry[new_element][chem_analysis_method] = np.round(new_concentration,decimals=0) if new_concentration > 20 else np.round(new_concentration,decimals=3)
+        # if len(str(new_concentration)) > 8:
+        #     print(f'{self.id}: {new_element} conc: {new_concentration} rounded to {np.round(new_concentration,decimals=0) if new_concentration > 20 else np.round(new_concentration,decimals=3)}')
+
 
 @cache
 def isSuperCRM(crm_id:str):
@@ -234,11 +238,12 @@ def main():
     # add element symbol only AND superCRM columns
     cat_df['Element Symbol'] = cat_df['Element'].apply(getFirstElementOfNameAndCompound)
     cat_df['SuperCRM'] = cat_df['CRM ID'].apply(isSuperCRM)
-    print(cat_df)
-    #cat_df.to_csv('outputcsv.csv')
-    print(countAnalysisMethodsForElement(cat_df,'U'))
+    #print(cat_df)
+    #cat_df.to_csv('output.csv')
+    #print(countAnalysisMethodsForElement(cat_df,'U'))
 
-
+    
+    # initially process CRMs from catalogue into Crm class objects
     crm_ids_seen = set([])
     crms = []
     for i in cat_df.index:
@@ -248,21 +253,64 @@ def main():
             if crm_ids_seen:    # if ids seen list is NOT empty
                 crms.append(currentcrm) # append currentCRM to list unless it's the first crm (list will be empty)
             crm_ids_seen.add(id)
-            currentcrm = CRM(crm_id=id, crm_group=cat_df['CRM Group'][i], crm_type=cat_df['CRM Type'][i], crm_matrix=cat_df['Matrix'][i], crm_mineralisation=cat_df['Mineralisation Style'][i],crm_status=cat_df['Status'][i])
+            currentcrm = Crm(crm_id=id, crm_group=cat_df['CRM Group'][i], crm_type=cat_df['CRM Type'][i], crm_matrix=cat_df['Matrix'][i], crm_mineralisation=cat_df['Mineralisation Style'][i],crm_status=cat_df['Status'][i])
         # add data to crm
         formula = cat_df['Element'][i]
         if ', ' in formula:
             formula = formula.split(', ')[1]
-        currentcrm.addChemistry(chem_formula=formula, chem_concentration=cat_df['Certified Value'][i], chem_unit=cat_df['Unit'][i], chem_analysis_method=cat_df['Analysis Method'][i])
+        # check if value is INDICATIVE, (also e.g.<2ppm) - if so, DO NOT USE
+        if cat_df['1SD'][i] != 'IND':    
+            currentcrm.addChemistry(chem_formula=formula, chem_concentration=cat_df['Certified Value'][i], chem_unit=cat_df['Unit'][i], chem_analysis_method=cat_df['Analysis Method'][i])
     crms.append(currentcrm) # for the last on the list!
-    # output data to txt for testing
-    with open('output.txt',mode='w') as f:
-        for crm in crms:
-            f.write(f'start of {crm.id} chemistry:\n')
-            f.write(json.dumps(crm.chemistry))
-            f.write(f'\nend of {crm.id} chemistry.\n\n\n')
 
-    
+    crms_total_amount = len(crm_ids_seen)
+    print(f'Total of {crms_total_amount} CRMs found in catalogue.')
+
+
+    new_df = pd.DataFrame(columns=['ID','Group','Type','Matrix','Mineralisation Style','SuperCRM','Status','Catalogue File Name','Ag', 'Ag Method', 'Al', 'Al Method', 'As', 'As Method', 'Au', 'Au Method', 'B', 'B Method', 'Ba', 'Ba Method', 'Be', 'Be Method', 'Bi', 'Bi Method', 'Ca', 'Ca Method', 'Cd', 'Cd Method', 'Ce', 'Ce Method', 'Cl', 'Cl Method', 'Co', 'Co Method', 'Cr', 'Cr Method', 'Cs', 'Cs Method', 'Cu', 'Cu Method', 'Dy', 'Dy Method', 'Er', 'Er Method', 'Eu', 'Eu Method', 'Fe', 'Fe Method', 'Ga', 'Ga Method', 'Gd', 'Gd Method', 'Ge', 'Ge Method', 'Hf', 'Hf Method', 'Hg', 'Hg Method', 'Ho', 'Ho Method', 'In', 'In Method', 'Ir', 'Ir Method', 'K', 'K Method', 'La', 'La Method', 'Li', 'Li Method', 'Lu', 'Lu Method', 'Mg', 'Mg Method', 'Mn', 'Mn Method', 'Mo', 'Mo Method', 'Na', 'Na Method', 'Nb', 'Nb Method', 'Nd', 'Nd Method', 'Ni', 'Ni Method', 'P', 'P Method', 'Pb', 'Pb Method', 'Pd', 'Pd Method', 'Pr', 'Pr Method', 'Pt', 'Pt Method', 'Rb', 'Rb Method', 'Re', 'Re Method', 'Rh', 'Rh Method', 'Ru', 'Ru Method', 'S', 'S Method', 'Sb', 'Sb Method', 'Sc', 'Sc Method', 'Se', 'Se Method', 'Si', 'Si Method', 'Sm', 'Sm Method', 'Sn', 'Sn Method', 'Sr', 'Sr Method', 'Ta', 'Ta Method', 'Tb', 'Tb Method', 'Te', 'Te Method', 'Th', 'Th Method', 'Ti', 'Ti Method', 'Tl', 'Tl Method', 'Tm', 'Tm Method', 'U', 'U Method', 'V', 'V Method', 'W', 'W Method', 'Y', 'Y Method', 'Yb', 'Yb Method', 'Zn', 'Zn Method', 'Zr', 'Zr Method'])
+    conc = 0
+    statusi = 0
+    for crm in crms:
+        statusi += 1
+        print(f'Processing CRM Data... [{str(statusi).zfill(3)}/{crms_total_amount}]')
+        crm_row_dict = {}
+        crm_row_dict['ID'] = crm.id
+        crm_row_dict['Group'] = crm.group
+        crm_row_dict['Type'] = crm.type
+        crm_row_dict['Matrix'] = crm.matrix
+        crm_row_dict['Mineralisation Style'] = crm.mineralisation
+        crm_row_dict['SuperCRM'] = crm.supercrm
+        crm_row_dict['Status'] = crm.status
+        crm_row_dict['Catalogue File Name'] = catalogue_path
+        #print(crm.chemistry)
+        for element, method_conc_dict in crm.chemistry.items():
+            if element not in PREFS: continue
+            for pref_method in PREFS[element]:
+                if pref_method not in method_conc_dict:
+                    continue
+                else:
+                    # ADD CONCENTRATION FOR THAT ELEMENT: column title is element name = concentration value in dict for that method
+                    crm_row_dict[str(element)] = method_conc_dict[str(pref_method)]
+                    # ADD METHOD TO METHOD COLUMN FOR THAT ELEMENT.
+                    crm_row_dict[f'{element} Method'] = pref_method
+                    break
+        #print(crm_row_dict)
+        new_row_df = pd.DataFrame(data=crm_row_dict, index=[0])
+        new_df = pd.concat([new_df,new_row_df])
+        
+        
+
+    # print(new_df)
+    new_df.to_csv('output_processed.csv', index=False)
+    print(f'Processed data output to CSV. rows={new_df.shape[0]}, cols={new_df.shape[1]}')
+
+
+    # # output data to txt for testing
+    # with open('output.txt',mode='w') as f:
+    #     for crm in crms:
+    #         f.write(f'start of {crm.id} chemistry:\n')
+    #         f.write(json.dumps(crm.chemistry))
+    #         f.write(f'\nend of {crm.id} chemistry.\n\n\n')
 
     # # find list of unique entries in given col
     # unique_methods_list = set(cat_df['Analysis Method'].tolist())
@@ -284,20 +332,8 @@ def main():
     # print(unique_compound_formulas)
     # print(f'NUMBER OF UNIQUE COMPOUND FORMULAS: {len(unique_compound_formulas)}')
 
-
-
-    
     
     #for i in catalogue_df.index:
-
-
-
-
-
-
-
-
-
 
 
 
