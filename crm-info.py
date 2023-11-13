@@ -1,8 +1,8 @@
 # oreas catalogue info-grabber
 # started 2023/10/02 ZH
 
-versionNum = "v0.0.5"
-versionDate = "2023/11/03"
+versionNum = "v0.1.0"
+versionDate = "2023/11/13"
 
 import os
 import sys
@@ -14,6 +14,9 @@ import json
 from collections import Counter
 from functools import cache, wraps
 from time import time
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils.dataframe import dataframe_to_rows
 
 from analysismethodprefs import analysis_method_prefs_dict as PREFS
 from analysismethodprefs import supercrm_list as SUPERCRMS
@@ -53,37 +56,77 @@ class Crm:
         self.mineralisation = crm_mineralisation
         self.status = crm_status
         self.supercrm = "yes" if isSuperCRM(crm_id) else "no"
-        self.units = "ppm"  # this will be the format it will convert all other units to
+        self.url = ""
         if crm_id.startswith(
             "OREAS "
-        ):  # if oreas CRM, format ID to comply with chris' preferred formatting i.e. 'OREAS 100a' -> 'OREAS0100a'
+        ):  # if oreas CRM, format ID to comply with chris' preferred formatting i.e. 'OREAS 100a' -> 'OREAS0100a' and generate link
             self.id = format_oreas_crm_id(crm_id)
-        self.chemistry = {}
+            self.url = generate_oreas_crm_url(crm_id)
+        self.chemistry_ppm = {}
+        self.chemistry_wtpercent = {}
 
         # print(f'Initialising CRM... {self.id=} {self.group=}, {self.type=}, {self.matrix=}, {self.mineralisation=}, {self.status=}, {self.supercrm=}')
 
     def addChemistry(
-        self, chem_formula, chem_concentration, chem_unit, chem_analysis_method
+        self,
+        chem_formula: str,
+        chem_concentration,
+        chem_unit: str,
+        chem_analysis_method: str,
+        chem_is_indicative=False,
     ):
         # check formula - attempt conversion
         new_element = getFirstElementOfCompound(chem_formula)
         conv_factor = compoundToElementConversionFactor(chem_formula)
         if conv_factor == 1:
             new_element = chem_formula  # if cannot do stoich, (i.e. invalid symbols), then just resort to compound conc.
+
+        # GET PPM CONCENTRATION
         # check unit - convert if necessary ( can just multiply by conv_factor from compound conv. fact)
-        conv_factor = conv_factor * getUnitConversionFactor(
-            units_from=chem_unit, units_to=self.units
+        conv_factor_ppm = conv_factor * getUnitConversionFactor(
+            units_from=chem_unit, units_to="ppm"
         )
-        new_concentration = chem_concentration * conv_factor
-        # add to chem dict
-        if new_element not in self.chemistry.keys():
+        new_concentration_ppm = chem_concentration * conv_factor_ppm
+
+        # GET % CONCENTRATION
+        # check unit - convert if necessary ( can just multiply by conv_factor from compound conv. fact)
+        conv_factor_wtpercent = conv_factor * getUnitConversionFactor(
+            units_from=chem_unit, units_to="%"
+        )
+        new_concentration_wtpercent = chem_concentration * conv_factor_wtpercent
+
+        new_element_with_units_ppm = f"{new_element}(PPM)"
+        new_element_with_units_wtpercent = f"{new_element}(%)"
+
+        # add to BOTH chem dicts
+        if new_element_with_units_ppm not in self.chemistry_ppm.keys():
             # print(f'adding {new_element} to chemistry dict for {self.id}...')
-            self.chemistry[new_element] = {}
-        self.chemistry[new_element][chem_analysis_method] = (
-            np.round(new_concentration, decimals=0)
-            if new_concentration > 20
-            else np.round(new_concentration, decimals=3)
-        )
+            self.chemistry_ppm[new_element_with_units_ppm] = {}
+            self.chemistry_wtpercent[new_element_with_units_wtpercent] = {}
+
+        # rounding values to 3 dec places for ppm (lowest dp will be 1ppb), and 7 for % (lowest dp wll be 1ppb)
+        if chem_is_indicative:
+            self.chemistry_ppm[new_element_with_units_ppm][
+                chem_analysis_method
+            ] = f"{np.round(new_concentration_ppm,decimals=3)} INDICATIVE"
+            self.chemistry_wtpercent[new_element_with_units_wtpercent][
+                chem_analysis_method
+            ] = f"{np.round(new_concentration_wtpercent,decimals=7)} INDICATIVE"
+        else:
+            self.chemistry_ppm[new_element_with_units_ppm][
+                chem_analysis_method
+            ] = np.round(new_concentration_ppm, decimals=3)
+            self.chemistry_wtpercent[new_element_with_units_wtpercent][
+                chem_analysis_method
+            ] = np.round(new_concentration_wtpercent, decimals=7)
+
+        # no longer rounding conc values per chris' request
+        # self.chemistry[new_element][chem_analysis_method] = (
+        #     np.round(new_concentration, decimals=0)
+        #     if new_concentration > 20
+        #     else np.round(new_concentration, decimals=3)
+        # )
+        # rounds new ppm values to 3 decimal places (first place is 1ppb)
         # if len(str(new_concentration)) > 8:
         #     print(f'{self.id}: {new_element} conc: {new_concentration} rounded to {np.round(new_concentration,decimals=0) if new_concentration > 20 else np.round(new_concentration,decimals=3)}')
 
@@ -96,7 +139,7 @@ def isSuperCRM(crm_id: str):
 
 
 def getUnitConversionFactor(units_from: str, units_to: str):
-    # returns factor to multiply by to convert from units_from to units_to
+    """Returns the factor to multiply by to convert from units_from to units_to"""
     if units_from == "wt.%" or units_from == "wt %":
         units_from = "%"
     if units_to == "wt.%" or units_to == "wt %":
@@ -127,6 +170,7 @@ def getUnitConversionFactor(units_from: str, units_to: str):
 
 @cache
 def format_oreas_crm_id(crm_id: str):
+    """given an oreas crm id directly from the catalogue, return chris' requested format for the name (e.g. 'OREAS 45f' -> 'OREAS0045f')"""
     # Define regex pattern to match desired formatting from chris
     pattern = r"^OREAS (\d+)"
 
@@ -136,6 +180,15 @@ def format_oreas_crm_id(crm_id: str):
     ).replace(" ", "")
 
     return formatted_string
+
+
+@cache
+def generate_oreas_crm_url(crm_id: str):
+    """returns a url for oreas' website for the page for a CRM, given the crm ID from the catalogue. (e.g. 'OREAS 45f' -> 'https://www.oreas.com/crm/oreas-45f/')"""
+    # as of 2023/11/10, formatting for oreas site CRM details page is: https://www.oreas.com/crm/oreas-45f/
+    # i.e. replace spaces with hyphens
+    adjusted_crm_id = crm_id.replace(" ", "-")
+    return f'=Hyperlink("https://www.oreas.com/crm/{adjusted_crm_id}/")'
 
 
 @cache
@@ -642,19 +695,29 @@ def main():
         if ", " in formula:
             formula = formula.split(", ")[1]
         # check if value is INDICATIVE, (also e.g.<2ppm) - if so, DO NOT USE
-        if cat_df["1SD"][i] != "IND":
+        if cat_df["1SD"][i] == "IND":
             currentcrm.addChemistry(
                 chem_formula=formula,
                 chem_concentration=cat_df["Certified Value"][i],
                 chem_unit=cat_df["Unit"][i],
                 chem_analysis_method=cat_df["Analysis Method"][i],
+                chem_is_indicative=True,
             )
+        else:
+            currentcrm.addChemistry(
+                chem_formula=formula,
+                chem_concentration=cat_df["Certified Value"][i],
+                chem_unit=cat_df["Unit"][i],
+                chem_analysis_method=cat_df["Analysis Method"][i],
+                chem_is_indicative=False,
+            )
+
     crms.append(currentcrm)  # for the last on the list!
 
     crms_total_amount = len(crm_ids_seen)
     print(f"Total of {crms_total_amount} CRMs found in catalogue.")
 
-    new_df = pd.DataFrame(
+    all_data_df = pd.DataFrame(
         columns=[
             "ID",
             "Group",
@@ -664,145 +727,216 @@ def main():
             "SuperCRM",
             "Status",
             "Catalogue File Name",
-            "Ag",
+            "URL",
+            "Ag(PPM)",
+            "Ag(%)",
             "Ag Method",
-            "Al",
+            "Al(PPM)",
+            "Al(%)",
             "Al Method",
-            "As",
+            "As(PPM)",
+            "As(%)",
             "As Method",
-            "Au",
+            "Au(PPM)",
+            "Au(%)",
             "Au Method",
-            "B",
+            "B(PPM)",
+            "B(%)",
             "B Method",
-            "Ba",
+            "Ba(PPM)",
+            "Ba(%)",
             "Ba Method",
-            "Be",
+            "Be(PPM)",
+            "Be(%)",
             "Be Method",
-            "Bi",
+            "Bi(PPM)",
+            "Bi(%)",
             "Bi Method",
-            "Ca",
+            "Ca(PPM)",
+            "Ca(%)",
             "Ca Method",
-            "Cd",
+            "Cd(PPM)",
+            "Cd(%)",
             "Cd Method",
-            "Ce",
+            "Ce(PPM)",
+            "Ce(%)",
             "Ce Method",
-            "Cl",
+            "Cl(PPM)",
+            "Cl(%)",
             "Cl Method",
-            "Co",
+            "Co(PPM)",
+            "Co(%)",
             "Co Method",
-            "Cr",
+            "Cr(PPM)",
+            "Cr(%)",
             "Cr Method",
-            "Cs",
+            "Cs(PPM)",
+            "Cs(%)",
             "Cs Method",
-            "Cu",
+            "Cu(PPM)",
+            "Cu(%)",
             "Cu Method",
-            "Dy",
+            "Dy(PPM)",
+            "Dy(%)",
             "Dy Method",
-            "Er",
+            "Er(PPM)",
+            "Er(%)",
             "Er Method",
-            "Eu",
+            "Eu(PPM)",
+            "Eu(%)",
             "Eu Method",
-            "Fe",
+            "Fe(PPM)",
+            "Fe(%)",
             "Fe Method",
-            "Ga",
+            "Ga(PPM)",
+            "Ga(%)",
             "Ga Method",
-            "Gd",
+            "Gd(PPM)",
+            "Gd(%)",
             "Gd Method",
-            "Ge",
+            "Ge(PPM)",
+            "Ge(%)",
             "Ge Method",
-            "Hf",
+            "Hf(PPM)",
+            "Hf(%)",
             "Hf Method",
-            "Hg",
+            "Hg(PPM)",
+            "Hg(%)",
             "Hg Method",
-            "Ho",
+            "Ho(PPM)",
+            "Ho(%)",
             "Ho Method",
-            "In",
+            "In(PPM)",
+            "In(%)",
             "In Method",
-            "Ir",
+            "Ir(PPM)",
+            "Ir(%)",
             "Ir Method",
-            "K",
+            "K(PPM)",
+            "K(%)",
             "K Method",
-            "La",
+            "La(PPM)",
+            "La(%)",
             "La Method",
-            "Li",
+            "Li(PPM)",
+            "Li(%)",
             "Li Method",
-            "Lu",
+            "Lu(PPM)",
+            "Lu(%)",
             "Lu Method",
-            "Mg",
+            "Mg(PPM)",
+            "Mg(%)",
             "Mg Method",
-            "Mn",
+            "Mn(PPM)",
+            "Mn(%)",
             "Mn Method",
-            "Mo",
+            "Mo(PPM)",
+            "Mo(%)",
             "Mo Method",
-            "Na",
+            "Na(PPM)",
+            "Na(%)",
             "Na Method",
-            "Nb",
+            "Nb(PPM)",
+            "Nb(%)",
             "Nb Method",
-            "Nd",
+            "Nd(PPM)",
+            "Nd(%)",
             "Nd Method",
-            "Ni",
+            "Ni(PPM)",
+            "Ni(%)",
             "Ni Method",
-            "P",
+            "P(PPM)",
+            "P(%)",
             "P Method",
-            "Pb",
+            "Pb(PPM)",
+            "Pb(%)",
             "Pb Method",
-            "Pd",
+            "Pd(PPM)",
+            "Pd(%)",
             "Pd Method",
-            "Pr",
+            "Pr(PPM)",
+            "Pr(%)",
             "Pr Method",
-            "Pt",
+            "Pt(PPM)",
+            "Pt(%)",
             "Pt Method",
-            "Rb",
+            "Rb(PPM)",
+            "Rb(%)",
             "Rb Method",
-            "Re",
+            "Re(PPM)",
+            "Re(%)",
             "Re Method",
-            "Rh",
+            "Rh(PPM)",
+            "Rh(%)",
             "Rh Method",
-            "Ru",
+            "Ru(PPM)",
+            "Ru(%)",
             "Ru Method",
-            "S",
+            "S(PPM)",
+            "S(%)",
             "S Method",
-            "Sb",
+            "Sb(PPM)",
+            "Sb(%)",
             "Sb Method",
-            "Sc",
+            "Sc(PPM)",
+            "Sc(%)",
             "Sc Method",
-            "Se",
+            "Se(PPM)",
+            "Se(%)",
             "Se Method",
-            "Si",
+            "Si(PPM)",
+            "Si(%)",
             "Si Method",
-            "Sm",
+            "Sm(PPM)",
+            "Sm(%)",
             "Sm Method",
-            "Sn",
+            "Sn(PPM)",
+            "Sn(%)",
             "Sn Method",
-            "Sr",
+            "Sr(PPM)",
+            "Sr(%)",
             "Sr Method",
-            "Ta",
+            "Ta(PPM)",
+            "Ta(%)",
             "Ta Method",
-            "Tb",
+            "Tb(PPM)",
+            "Tb(%)",
             "Tb Method",
-            "Te",
+            "Te(PPM)",
+            "Te(%)",
             "Te Method",
-            "Th",
+            "Th(PPM)",
+            "Th(%)",
             "Th Method",
-            "Ti",
+            "Ti(PPM)",
+            "Ti(%)",
             "Ti Method",
-            "Tl",
+            "Tl(PPM)",
+            "Tl(%)",
             "Tl Method",
-            "Tm",
+            "Tm(PPM)",
+            "Tm(%)",
             "Tm Method",
-            "U",
+            "U(PPM)",
+            "U(%)",
             "U Method",
-            "V",
+            "V(PPM)",
+            "V(%)",
             "V Method",
-            "W",
+            "W(PPM)",
+            "W(%)",
             "W Method",
-            "Y",
+            "Y(PPM)",
+            "Y(%)",
             "Y Method",
-            "Yb",
+            "Yb(PPM)",
+            "Yb(%)",
             "Yb Method",
-            "Zn",
+            "Zn(PPM)",
+            "Zn(%)",
             "Zn Method",
-            "Zr",
+            "Zr(PPM)",
+            "Zr(%)",
             "Zr Method",
         ]
     )
@@ -820,28 +954,116 @@ def main():
         crm_row_dict["SuperCRM"] = crm.supercrm
         crm_row_dict["Status"] = crm.status
         crm_row_dict["Catalogue File Name"] = catalogue_path
+        crm_row_dict["URL"] = crm.url
         # print(crm.chemistry)
-        for element, method_conc_dict in crm.chemistry.items():
-            if element not in PREFS:
+        # write ppm info
+        for element, method_conc_dict in crm.chemistry_ppm.items():
+            element_symbol_only = re.sub(r"\([^)]*\)", "", element)
+            if element_symbol_only not in PREFS:
                 continue
-            for pref_method in PREFS[element]:
+            for pref_method in PREFS[element_symbol_only]:
                 if pref_method not in method_conc_dict:
                     continue
                 else:
-                    # ADD CONCENTRATION FOR THAT ELEMENT: column title is element name = concentration value in dict for that method
+                    # ADD CONCENTRATION FOR THAT ELEMENT: column title is element name(unit) = concentration value in dict for that method
                     crm_row_dict[str(element)] = method_conc_dict[str(pref_method)]
                     # ADD METHOD TO METHOD COLUMN FOR THAT ELEMENT.
-                    crm_row_dict[f"{element} Method"] = pref_method
+                    crm_row_dict[f"{element_symbol_only} Method"] = pref_method
                     break
+                # this will run if no matches are found for the element
+                print("no ")
+
+        # write % info
+        for element, method_conc_dict in crm.chemistry_wtpercent.items():
+            element_symbol_only = re.sub(r"\([^)]*\)", "", element)
+            if element_symbol_only not in PREFS:
+                continue
+            for pref_method in PREFS[element_symbol_only]:
+                if pref_method not in method_conc_dict:
+                    continue
+                else:
+                    # ADD CONCENTRATION FOR THAT ELEMENT: column title is element name(unit) = concentration value in dict for that method
+                    crm_row_dict[str(element)] = method_conc_dict[str(pref_method)]
+                    # ADD METHOD TO METHOD COLUMN FOR THAT ELEMENT.
+                    # crm_row_dict[f"{element} Method"] = pref_method
+                    break
+
         # print(crm_row_dict)
         new_row_df = pd.DataFrame(data=crm_row_dict, index=[0])
-        new_df = pd.concat([new_df, new_row_df])
+        all_data_df = pd.concat([all_data_df, new_row_df])
 
-    # print(new_df)
-    new_df.to_csv("output_processed.csv", index=False)
-    print(
-        f"Processed data output to CSV. rows={new_df.shape[0]}, cols={new_df.shape[1]}"
-    )
+    # TO CSV
+    # all_data_df.to_csv("output_processed.csv", index=False, float_format="%f")
+    # print(
+    #     f"Processed data output to CSV. rows={all_data_df.shape[0]}, cols={all_data_df.shape[1]}"
+    # )
+
+    # GENERATE DATAFRAMES FOR PPM AND % VALS ONLY
+    ppm_data_df_selected_cols = all_data_df.columns[:1].tolist() + [
+        col for col in all_data_df.columns if "(PPM)" in col
+    ]
+    ppm_data_df = all_data_df[ppm_data_df_selected_cols]
+    percent_data_df_selected_cols = all_data_df.columns[:1].tolist() + [
+        col for col in all_data_df.columns if "(%)" in col
+    ]
+    percent_data_df = all_data_df[percent_data_df_selected_cols]
+    # TO EXCEL
+    # Create an ExcelWriter object
+    outputxlsxname = "output.xlsx"
+    with pd.ExcelWriter(outputxlsxname, engine="openpyxl") as xlwriter:
+        all_data_df.to_excel(xlwriter, sheet_name="All Data", index=False)
+        ppm_data_df.to_excel(xlwriter, sheet_name="PPM Data", index=False)
+        percent_data_df.to_excel(xlwriter, sheet_name="Percent Data", index=False)
+
+        # Access the workbook and sheet
+        xlworkbook = xlwriter.book
+        xlworksheet_all = xlwriter.sheets["All Data"]
+        xlworksheet_ppm = xlwriter.sheets["PPM Data"]
+        xlworksheet_percent = xlwriter.sheets["Percent Data"]
+
+        # Iterate through the cells to find and format the ones with 'INDICATIVE' text, FOR EACH PAGE IN WORKBOOK
+        print(f'Processing and Formatting {outputxlsxname} - "All Data" sheet...')
+        for row in xlworksheet_all.iter_rows(
+            min_row=2, max_col=all_data_df.shape[1], max_row=xlworksheet_all.max_row
+        ):
+            for cell in row:
+                if " INDICATIVE" in str(cell.value):
+                    cell.font = Font(strikethrough=True)
+                    cell.value = float(cell.value.replace(" INDICATIVE", "").strip())
+
+        print(f'"All Data" sheet formatted.')
+
+        print(f'Processing and Formatting {outputxlsxname} - "PPM Data" sheet...')
+        for row in xlworksheet_ppm.iter_rows(
+            min_row=2, max_col=ppm_data_df.shape[1], max_row=xlworksheet_ppm.max_row
+        ):
+            for cell in row:
+                if " INDICATIVE" in str(cell.value):
+                    cell.font = Font(strikethrough=True)
+                    cell.value = float(cell.value.replace(" INDICATIVE", "").strip())
+                elif cell.value is None or cell.value == "":
+                    cell.value = "T"
+        print(f'"PPM Data" sheet formatted.')
+
+        print(f'Processing and Formatting {outputxlsxname} - "Percent Data" sheet...')
+        for row in xlworksheet_percent.iter_rows(
+            min_row=2,
+            max_col=percent_data_df.shape[1],
+            max_row=xlworksheet_percent.max_row,
+        ):
+            for cell in row:
+                if " INDICATIVE" in str(cell.value):
+                    cell.font = Font(strikethrough=True)
+                    cell.value = float(cell.value.replace(" INDICATIVE", "").strip())
+                elif cell.value is None or cell.value == "":
+                    cell.value = "T"
+        print(f'"PPM Data" sheet formatted.')
+
+        "Finishing up..."
+    print("Done.")
+
+    # Save the Excel file
+    # xlworkbook.save()
 
     # # output data to txt for testing
     # with open('output.txt',mode='w') as f:
