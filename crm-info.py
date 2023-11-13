@@ -1058,8 +1058,7 @@ def main():
                 elif cell.value is None or cell.value == "":
                     cell.value = "T"
         print(f'"PPM Data" sheet formatted.')
-
-        "Finishing up..."
+        print("Finishing up...")
     print("Done.")
 
     # Save the Excel file
