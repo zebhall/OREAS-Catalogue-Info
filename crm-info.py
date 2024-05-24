@@ -1,9 +1,6 @@
 # oreas catalogue info-grabber
 # started 2023/10/02 ZH
 
-versionNum = "v0.1.0"
-versionDate = "2023/11/13"
-
 import os
 import sys
 import re
@@ -17,10 +14,13 @@ from time import time
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
+from tkinter import filedialog
 
 from analysismethodprefs import analysis_method_prefs_dict as PREFS
 from analysismethodprefs import supercrm_list as SUPERCRMS
 
+versionNum = "v0.1.1"
+versionDate = "2024/05/24"
 
 # for sorting analysis method, USE: 4-Acid Digestion >
 # chris has doc: Merging.xlsx G:\.shortcut-targets-by-id\1w2nUsja1tidZ-QYTuemO6DzCaclAmIlm\PXRFS\12. Certified Reference Material\5_CRM Master Spreadsheet\OREAS Sorting
@@ -661,7 +661,7 @@ def countAnalysisMethodsForElement(catdf: pd.DataFrame, element: str):
 @timing
 def main():
     # open oreas catalogue as csv, convert to dataframe
-    catalogue_path = "oreas-catalogue-2023-11-03.csv"
+    catalogue_path = filedialog.askopenfilename(initialdir=os.getcwd(),filetypes=[("CSV Files", "*.csv")])# "oreas-catalogue-2023-11-03.csv"
     cat_df = pd.read_csv(catalogue_path)
 
     # add element symbol only AND superCRM columns
@@ -674,6 +674,7 @@ def main():
     # initially process CRMs from catalogue into Crm class objects
     crm_ids_seen = set([])
     crms = []
+    currentcrm = None
     for i in cat_df.index:
         id = cat_df["CRM ID"][i]
         # if crm id not seen before, then make new instance of CRM class
@@ -1031,7 +1032,7 @@ def main():
                     cell.font = Font(strikethrough=True)
                     cell.value = float(cell.value.replace(" INDICATIVE", "").strip())
 
-        print(f'"All Data" sheet formatted.')
+        print('"All Data" sheet formatted.')
 
         print(f'Processing and Formatting {outputxlsxname} - "PPM Data" sheet...')
         for row in xlworksheet_ppm.iter_rows(
@@ -1043,7 +1044,7 @@ def main():
                     cell.value = float(cell.value.replace(" INDICATIVE", "").strip())
                 elif cell.value is None or cell.value == "":
                     cell.value = "T"
-        print(f'"PPM Data" sheet formatted.')
+        print('"PPM Data" sheet formatted.')
 
         print(f'Processing and Formatting {outputxlsxname} - "Percent Data" sheet...')
         for row in xlworksheet_percent.iter_rows(
@@ -1057,7 +1058,7 @@ def main():
                     cell.value = float(cell.value.replace(" INDICATIVE", "").strip())
                 elif cell.value is None or cell.value == "":
                     cell.value = "T"
-        print(f'"PPM Data" sheet formatted.')
+        print('"PPM Data" sheet formatted.')
         print("Finishing up...")
     print("Done.")
 
