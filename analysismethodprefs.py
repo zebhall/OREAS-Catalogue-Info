@@ -1,5 +1,5 @@
 # analysis method prefs for preferentially parsing oreas catalogue.
-# last updated ZH 20231103
+# last updated ZH 20240524
 
 # all assay methods as of 20231012:
 #  '4-Acid Digestion'
@@ -22,7 +22,7 @@
 #  'Thermogravimetry'
 #  'Cyanide Leach'
 #  'Gas / Liquid Pycnometry'
-# 'Sulphuric Acid 5% Leach'
+#  'Sulphuric Acid 5% Leach'
 #  'PhotonAssay'
 #  'Classical Wet Chemistry'
 #  'Sulphuric Acid 10% Leach'
@@ -30,6 +30,50 @@
 #  'Satmagan 135'
 #  'Davis Tube Recovery'
 #  'Miscellaneous Assay Methods'
+
+all_analysis_methods = [
+    "4-Acid Digestion",
+    "3-Acid Digestion (no HF)",
+    "Acid Digestion (no HF)",
+    "Pb Fire Assay",
+    "NiS Fire Assay",
+    "Pb Fire Assay (Grav)",
+    "Pb/NiS Fire Assay",
+    "Pb Fire Assay (full corrections)",
+    "Borate Fusion XRF",
+    "Oxidising Fusion XRF",
+    "Pressed Powder Pellet XRF",
+    "Borate / Peroxide Fusion ICP",
+    "Peroxide Fusion ICP",
+    "Aqua Regia Digestion",
+    "Aqua Regia Digestion (sample weights 0.15-50g)",
+    "Aqua Regia Digestion (sample weights 10-50g)",
+    "Infrared Combustion",
+    "Thermogravimetry",
+    "Cyanide Leach",
+    "Gas / Liquid Pycnometry",
+    "Sulphuric Acid 5% Leach",
+    "PhotonAssay",
+    "Classical Wet Chemistry",
+    "Sulphuric Acid 10% Leach",
+    "Acid Digestion Titration",
+    "Satmagan 135",
+    "Davis Tube Recovery",
+    "Miscellaneous Assay Methods",
+	"Acid Leach",
+	"Alkaline Leach",
+	"Aqua Regia Digestion (sample weights 0.15-1.0g)",
+	"Borate Fusion ICP",
+	"Coulometry",
+	"Fire Assay",
+	"Fusion ICP",
+	"Fusion X-Ray Fluorescence",
+	"Instrumental Neutron Activation Analysis",
+	"Ion Selective Electrode",
+	"Laser Ablation ICP-MS",
+	"Partial Digestion",
+	"Proximate Analysis",
+]
 
 
 # set up dict of preferred analysis methods for each element - format: (key)*Element*: (value)[*1st pref*, *2nd pref*, *3rd pref*,...]
@@ -896,6 +940,12 @@ supercrm_list = set(
         "OREAS 266",
         "OREAS 273",
         "OREAS 282",
+        "OREAS 284",
+        "OREAS 285",
+        "OREAS 286",
+        "OREAS 287",
+        "OREAS 288",
+        "OREAS 289",
         "OREAS 290",
         "OREAS 291",
         "OREAS 292",
@@ -920,6 +970,7 @@ supercrm_list = set(
         "OREAS 501b",
         "OREAS 501c",
         "OREAS 501d",
+        "OREAS 501e",
         "OREAS 502b",
         "OREAS 502c",
         "OREAS 502d",
@@ -933,10 +984,12 @@ supercrm_list = set(
         "OREAS 505",
         "OREAS 505b",
         "OREAS 506",
+        "OREAS 506b",
         "OREAS 507",
+        "OREAS 507b",
         "OREAS 508",
         "OREAS 520",
-        "OREAS 520b",
+        "OREAS 520c",
         "OREAS 521",
         "OREAS 522",
         "OREAS 523",
@@ -956,6 +1009,7 @@ supercrm_list = set(
         "OREAS 556b",
         "OREAS 600",
         "OREAS 600b",
+        "OREAS 600c",
         "OREAS 601",
         "OREAS 601b",
         "OREAS 601c",
@@ -969,13 +1023,19 @@ supercrm_list = set(
         "OREAS 605",
         "OREAS 605b",
         "OREAS 606",
+        "OREAS 606b",
         "OREAS 607",
         "OREAS 607b",
+        "OREAS 607c",
         "OREAS 608",
+        "OREAS 608b",
         "OREAS 609",
         "OREAS 609b",
+        "OREAS 609c",
         "OREAS 610",
+        "OREAS 610b",
         "OREAS 611",
+        "OREAS 611b",
         "OREAS 620",
         "OREAS 621",
         "OREAS 622",
@@ -1006,6 +1066,7 @@ supercrm_list = set(
         "OREAS 905",
         "OREAS 905b",
         "OREAS 906",
+        "OREAS 906b",
         "OREAS 907",
         "OREAS 907b",
         "OREAS 908",
